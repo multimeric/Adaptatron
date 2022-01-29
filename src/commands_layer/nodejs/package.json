@@ -3,7 +3,11 @@
   "version": "0.0.1",
   "author": "ytausch",
   "license": "MIT",
+  "scripts": {
+    "preinstall": "wget https://dd.b.pvp.net/latest/set4-lite-en_us.zip && unzip *.zip"
+  },
   "dependencies": {
-    "slash-create": "^4.3.1"
+    "@types/node": "^17.0.13",
+    "slash-create": "^5.0.3"
   }
 }

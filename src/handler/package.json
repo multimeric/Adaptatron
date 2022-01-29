@@ -5,6 +5,7 @@
   "author": "ytausch",
   "license": "MIT",
   "devDependencies": {
-    "slash-create": "^4.3.1"
+    "discord.js": "^13.6.0",
+    "slash-create": "^5.0.3"
   }
 }

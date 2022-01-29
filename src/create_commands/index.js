@@ -8,7 +8,7 @@ const {SlashCreator} = require('slash-create');
 const COMMANDS_DIR_OPTIONS = {
     dirname: '/opt/nodejs/commands',
     filter: /^([^.].*)\.js$/,
-    recursive: false
+    recursive: false,
 };
 
 exports.lambdaHandler = CfnLambda({
