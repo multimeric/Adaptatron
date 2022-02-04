@@ -68,7 +68,7 @@ export class DiscordStack extends Stack {
 
         // We return the URL as this is needed to plug into the discord developer dashboard
         new cdk.CfnOutput(this, 'discordEndpoint', {
-            value: `${gateway.apiEndpoint}/${route[0].path}`,
+            value: gateway.apiEndpoint + route[0].path,
             description: 'The Interactions Endpoint URL for your discord bot',
             exportName: 'discordInteractionsUrl',
         });
