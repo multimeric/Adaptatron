@@ -1,8 +1,8 @@
 import LambdaSlashCommand from "./command";
 interface SlashEnv {
-    applicationID: string;
-    publicKey: string;
-    token: string;
+  applicationID: string;
+  publicKey: string;
+  token: string;
 }
 /**
  * Returns a dictionary of env vars to pass into the SlashCreator
