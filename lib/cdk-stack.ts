@@ -1,20 +1,45 @@
 import * as cdk from "aws-cdk-lib";
-import { Stack, StackProps } from "aws-cdk-lib";
-import { Construct } from "constructs";
+import {Stack, StackProps} from "aws-cdk-lib";
+import {Construct} from "constructs";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
 import * as apigateway from "@aws-cdk/aws-apigatewayv2-alpha";
 import * as apiGatewayIntegrations from "@aws-cdk/aws-apigatewayv2-integrations-alpha";
 import * as cr from "aws-cdk-lib/custom-resources";
-import { AwsCustomResourcePolicy } from "aws-cdk-lib/custom-resources";
-import { getCdkEnv } from "./common";
+import {AwsCustomResourcePolicy} from "aws-cdk-lib/custom-resources";
+import {getCdkEnv} from "./common";
 import * as path from "path";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb"
 
-export class DiscordStack extends Stack {
+export class DiscordSupportStack extends Stack {
+  table: dynamodb.Table;
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    // Table for storing card data
+    this.table = new dynamodb.Table(this, "cardTable", {
+      partitionKey: {
+        name: "cardCode", type: dynamodb.AttributeType.STRING
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+    });
+  }
+
+}
+
+export interface DiscordStackProps extends StackProps {
+  table: dynamodb.Table
+}
+
+export class DiscordStack extends Stack {
+
+  constructor(scope: Construct, id: string, props: DiscordStackProps) {
+    super(scope, id, props);
+
     const envVars = getCdkEnv();
+
+    // Ensure lambdas can access dynamo
+    envVars["AWS_TABLE_NAME"] = props.table.tableName;
 
     // The lambda that runs in response to each bot interaction
     const handler = new lambda.NodejsFunction(this, "discordInteractions", {
@@ -29,11 +54,11 @@ export class DiscordStack extends Stack {
       path: "/event",
       methods: [apigateway.HttpMethod.POST],
       integration: new apiGatewayIntegrations.HttpLambdaIntegration(
-        "lambdaIntegration",
-        handler,
-        {
-          payloadFormatVersion: apigateway.PayloadFormatVersion.VERSION_2_0,
-        }
+          "lambdaIntegration",
+          handler,
+          {
+            payloadFormatVersion: apigateway.PayloadFormatVersion.VERSION_2_0,
+          }
       ),
     });
 
@@ -56,7 +81,7 @@ export class DiscordStack extends Stack {
         InvocationType: "Event",
       },
       physicalResourceId: cr.PhysicalResourceId.of(
-        "JobSenderTriggerPhysicalId"
+          "JobSenderTriggerPhysicalId"
       ),
     };
     const updater = new cr.AwsCustomResource(this, "commandUpdater", {
@@ -79,8 +104,7 @@ export class DiscordStack extends Stack {
       exportName: "discordInteractionsUrl",
     });
 
-    /*
-    Put your infrastructure here, e.g. creating a DynamoDB
-    */
+    props.table.grantFullAccess(setupFunction);
+    props.table.grantFullAccess(handler);
   }
 }
