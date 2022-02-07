@@ -46,6 +46,9 @@ export class DiscordStack extends Stack {
       environment: envVars,
       entry: path.resolve(__dirname, "./lambda.ts"),
       handler: "interactions",
+      bundling: {
+        preCompilation: true
+      }
     });
 
     // The API that hosts the above lambda
@@ -68,6 +71,9 @@ export class DiscordStack extends Stack {
       environment: envVars,
       entry: path.resolve(__dirname, "./setup.ts"),
       handler: "handler",
+      bundling: {
+        preCompilation: true
+      }
     });
 
     // This is a trick to make the above lambda run once on create or update

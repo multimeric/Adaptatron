@@ -1,7 +1,6 @@
 import "reflect-metadata"
 import {Model, PartitionKey} from '@shiftcoders/dynamo-easy'
 import * as AWS from 'aws-sdk/global'
-import * as rune from "lor-data-dragon";
 
 AWS.config.update({ region: 'us-east-1' })
 
@@ -14,3 +13,4 @@ export class Card {
     description: string
     assets: any[]
 }
+

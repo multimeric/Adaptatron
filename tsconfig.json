@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
-    "types": ["node"],
+    "types": [],
     "target": "ES2018",
     "module": "commonjs",
     "lib": ["es2020"],
     "importHelpers": true,
     "skipLibCheck": true,
     "declaration": true,
-    "strict": true,
+    "strict": false,
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noImplicitThis": true,

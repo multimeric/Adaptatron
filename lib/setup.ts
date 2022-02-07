@@ -6,22 +6,16 @@ import {DynamoDB} from "@aws-sdk/client-dynamodb"; // ES6 import
 import {
     APIApplicationCommandOptionChoice,
     ApplicationCommandOptionType,
-    Routes,
-    RESTPostAPIChatInputApplicationCommandsJSONBody
+    RESTPostAPIChatInputApplicationCommandsJSONBody,
+    Routes
 } from "discord-api-types/v9";
+import {CardFilter} from "./cardFilter"
+import {zip} from "iter-tools"
 
 const {REST} = require('@discordjs/rest');
 
-
 function delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function union<T>(setA: Iterable<T>, setB: Iterable<T>): Set<T> {
-    return new Set([
-        ...setA,
-        ...setB
-    ]);
 }
 
 async function pushCardBatch(ddbDocClient: DynamoDBDocument, batch: any[]) {
@@ -52,14 +46,14 @@ async function pushCardBatch(ddbDocClient: DynamoDBDocument, batch: any[]) {
 
 async function iterateCards(dragon: rune.DataDragon): Promise<Choices> {
     const ret: Choices = {
-        keywords: new Set(),
-        regions: new Set(),
-        sets: new Set(),
-        speeds: new Set(),
-        rarities: new Set(),
-        subtypes: new Set(),
-        supertypes: new Set(),
-        types: new Set(),
+        keywords: new Map(),
+        regions: new Map(),
+        sets: new Map(),
+        speeds: new Map(),
+        rarities: new Map(),
+        subtypes: new Map(),
+        supertypes: new Map(),
+        types: new Map(),
     };
     const cards = [];
     const client = new DynamoDB({});
@@ -73,25 +67,41 @@ async function iterateCards(dragon: rune.DataDragon): Promise<Choices> {
         for (const card of await bundle.getCards()) {
             // Update lists of options
             if (card.spellSpeed) {
-                ret.speeds.add(card.spellSpeed);
+                ret.speeds.set(card.spellSpeed, {name: card.spellSpeed, value: card.spellSpeed});
             }
             if (card.rarity) {
-                ret.rarities.add(card.rarity);
+                // For some reason the rarityRef is human readable here
+                ret.rarities.set(card.rarityRef, {name: card.rarityRef, value: card.rarityRef});
             }
             if (card.type) {
-                ret.types.add(card.type);
+                ret.types.set(card.type, {name: card.type, value: card.type});
             }
             if (card.supertype) {
-                ret.supertypes.add(card.supertype);
+                ret.supertypes.set(card.supertype, {name: card.supertype, value: card.supertype});
             }
             if (card.set) {
                 const setNumber = parseInt(card.set.slice(-1));
-                ret.sets.add(rune.Set[setNumber]);
+                ret.sets.set(setNumber, {name: rune.Set[setNumber], value: setNumber});
             }
 
-            ret.keywords = union(ret.keywords, card.keywords);
-            ret.regions = union(ret.regions, card.regions);
-            ret.subtypes = union(ret.subtypes, card.subtypes);
+            for (const [keyword, ref] of zip(card.keywords, card.keywordRefs)){
+                ret.keywords.set(ref, {
+                    name: keyword,
+                    value: ref
+                })
+            }
+            for (const [region, ref] of zip(card.regions, card.regionRefs)){
+                ret.regions.set(ref, {
+                    name: region,
+                    value: ref
+                })
+            }
+            for (const subtype of card.subtypes){
+                ret.keywords.set(subtype, {
+                    name: subtype.toLowerCase(),
+                    value: subtype
+                })
+            }
 
             cards.push({
                 PutRequest: {
@@ -113,21 +123,14 @@ async function iterateCards(dragon: rune.DataDragon): Promise<Choices> {
 }
 
 interface Choices {
-    keywords: Set<string>,
-    regions: Set<string>,
-    subtypes: Set<string>,
-    supertypes: Set<string>,
-    types: Set<string>,
-    rarities: Set<string>,
-    speeds: Set<string>,
-    sets: Set<string>,
-}
-
-function stringToOption(opts: Iterable<string>): APIApplicationCommandOptionChoice<string>[] {
-    return Array.from(opts).map(opt => ({
-        name: opt,
-        value: opt
-    }));
+    keywords: Map<string, APIApplicationCommandOptionChoice<string>>,
+    regions: Map<string, APIApplicationCommandOptionChoice<string>>,
+    subtypes: Map<string, APIApplicationCommandOptionChoice<string>>,
+    supertypes: Map<string, APIApplicationCommandOptionChoice<string>>,
+    types: Map<string, APIApplicationCommandOptionChoice<string>>,
+    rarities: Map<string, APIApplicationCommandOptionChoice<string>>,
+    speeds: Map<string, APIApplicationCommandOptionChoice<string>>,
+    sets: Map<number, APIApplicationCommandOptionChoice<number>>
 }
 
 async function registerCommands(choices: Choices) {
@@ -141,111 +144,111 @@ async function registerCommands(choices: Choices) {
         options: [
             {
                 type: ApplicationCommandOptionType.String,
-                name: "name_contains",
+                name: CardFilter.NameContains,
                 description: "One or more words that can be found within the card name",
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "description_contains",
+                name: CardFilter.DescriptionContains,
                 description: "One or more words that can be found within the card's description",
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "level_up_description",
+                name: CardFilter.LevelUpContains,
                 description: "One or more words that can be found within the champion's level up text",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "attack_equals",
+                name: CardFilter.AttackEquals,
                 description: "The unit's attack is equal to",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "attack_greater",
+                name: CardFilter.AttackGreater,
                 description: "The unit's attack is greater than",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "attack_less",
+                name: CardFilter.AttackLess,
                 description: "The unit's attack is less than",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "health_equals",
+                name: CardFilter.HealthEquals,
                 description: "The unit's health is equal to",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "health_greater",
+                name: CardFilter.HealthGreater,
                 description: "The unit's health is greater than",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "health_less",
+                name: CardFilter.HealthLess,
                 description: "The unit's health is less than",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "cost_equals",
+                name: CardFilter.CostEquals,
                 description: "The unit's cost is equal to",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "cost_greater",
+                name: CardFilter.CostGreater,
                 description: "The unit's cost is greater than",
             },
             {
                 type: ApplicationCommandOptionType.Integer,
-                name: "cost_less",
+                name: CardFilter.CostLess,
                 description: "The unit's cost is less than",
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "has_keyword",
+                name: CardFilter.HasKeyword,
                 description: "The unit has the keyword",
-                // choices: stringToOption(choices.keywords)
+                // choices: Array.from(choices.keywords)
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "has_supertype",
+                name: CardFilter.HasSupertype,
                 description: "The unit has the supertype",
-                choices: stringToOption(choices.supertypes)
+                choices: Array.from(choices.supertypes.values())
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "has_type",
+                name: CardFilter.HasType,
                 description: "The unit has the type",
-                choices: stringToOption(choices.types)
+                choices: Array.from(choices.types.values())
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "has_subtype",
+                name: CardFilter.HasSubtype,
                 description: "The unit has the subtype",
-                choices: stringToOption(choices.subtypes)
+                choices: Array.from(choices.subtypes.values())
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "from_region",
+                name: CardFilter.FromRegion,
                 description: "The card comes from the region",
-                choices: stringToOption(choices.regions)
+                choices: Array.from(choices.regions.values())
             },
             {
-                type: ApplicationCommandOptionType.String,
-                name: "from_set",
+                type: ApplicationCommandOptionType.Integer,
+                name: CardFilter.FromSet,
                 description: "The card comes from the set",
-                choices: stringToOption(choices.sets)
+                choices: Array.from(choices.sets.values())
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "spell_speed",
+                name: CardFilter.SpellSpeed,
                 description: "The spell has the speed",
-                choices: stringToOption(choices.speeds)
+                choices: Array.from(choices.speeds.values())
             },
             {
                 type: ApplicationCommandOptionType.String,
-                name: "rarity",
+                name: CardFilter.HasRarity,
                 description: "The card has the rarity",
-                choices: stringToOption(choices.rarities)
+                choices: Array.from(choices.rarities.values())
             },
         ],
     };
