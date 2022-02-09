@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
     "types": [],
-    "target": "ES2018",
+    "target": "ES2020",
     "module": "commonjs",
     "lib": ["es2020"],
     "importHelpers": true,
     "skipLibCheck": true,
     "declaration": true,
-    "strict": false,
+    "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noImplicitThis": true,
@@ -21,7 +21,6 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "emitDecoratorMetadata": true
   },
   "exclude": ["node_modules", "cdk.out"]
 }

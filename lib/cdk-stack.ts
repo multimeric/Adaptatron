@@ -1,7 +1,8 @@
 import * as cdk from "aws-cdk-lib";
-import {Stack, StackProps} from "aws-cdk-lib";
+import {Duration, Stack, StackProps} from "aws-cdk-lib";
 import {Construct} from "constructs";
 import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
+import {Runtime} from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "@aws-cdk/aws-apigatewayv2-alpha";
 import * as apiGatewayIntegrations from "@aws-cdk/aws-apigatewayv2-integrations-alpha";
 import * as cr from "aws-cdk-lib/custom-resources";
@@ -10,6 +11,8 @@ import {getCdkEnv} from "./common";
 import * as path from "path";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb"
+import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 
 export class DiscordSupportStack extends Stack {
   table: dynamodb.Table;
@@ -41,13 +44,15 @@ export class DiscordStack extends Stack {
     // Ensure lambdas can access dynamo
     envVars["AWS_TABLE_NAME"] = props.table.tableName;
 
+
     // The lambda that runs in response to each bot interaction
-    const handler = new lambda.NodejsFunction(this, "discordInteractions", {
+    const defer = new lambda.NodejsFunction(this, "discordInteractions", {
       environment: envVars,
       entry: path.resolve(__dirname, "./lambda.ts"),
       handler: "interactions",
+      runtime: Runtime.NODEJS_14_X,
       bundling: {
-        preCompilation: true
+        target: "node14"
       }
     });
 
@@ -71,37 +76,21 @@ export class DiscordStack extends Stack {
       environment: envVars,
       entry: path.resolve(__dirname, "./setup.ts"),
       handler: "handler",
+      timeout: Duration.minutes(5),
+      memorySize: 4096,
+      runtime: Runtime.NODEJS_14_X,
       bundling: {
-        preCompilation: true
+        target: "node14"
       }
     });
 
-    // This is a trick to make the above lambda run once on create or update
-    // See: https://github.com/aws/aws-cdk/issues/10820#issuecomment-844648211
-    const hook = {
-      apiVersion: "2015-03-31",
-      service: "Lambda",
-      action: "invoke",
-      parameters: {
-        FunctionName: setupFunction.functionName,
-        InvocationType: "Event",
-      },
-      physicalResourceId: cr.PhysicalResourceId.of(
-          "JobSenderTriggerPhysicalId"
-      ),
-    };
-    const updater = new cr.AwsCustomResource(this, "commandUpdater", {
-      policy: AwsCustomResourcePolicy.fromStatements([
-        new iam.PolicyStatement({
-          actions: ["lambda:InvokeFunction"],
-          effect: iam.Effect.ALLOW,
-          resources: [setupFunction.functionArn],
-        }),
-      ]),
-      onCreate: hook,
-      onUpdate: hook,
+    const stateMachineDefinition = new tasks.LambdaInvoke(this, "invokeDefer", {
+       lambdaFunction:
+    })
+    const startState = new stepfunctions.Pass(this, 'StartState');
+    const simpleStateMachine  = new stepfunctions.StateMachine(this, 'SimpleStateMachine', {
+      definition: startState,
     });
-    updater.node.addDependency(setupFunction);
 
     // We return the URL as this is needed to plug into the discord developer dashboard
     new cdk.CfnOutput(this, "discordEndpoint", {

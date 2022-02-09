@@ -1,8 +1,8 @@
 import {CommandContext, SlashCreator} from "slash-create";
 import LambdaSlashCommand from "../command";
 import {Card} from "../models"
-import {DynamoStore} from '@shiftcoders/dynamo-easy'
 import {CardFilter} from "../cardFilter";
+import {FilterExpressions} from "dynamodb-toolbox/dist/lib/expressionBuilder";
 
 export default class CardCommand extends LambdaSlashCommand {
     constructor(creator: SlashCreator) {
@@ -10,89 +10,97 @@ export default class CardCommand extends LambdaSlashCommand {
         super(creator, {
             name: "lorcard",
             description: "fake description",
-            guildIDs: process.env.DISCORD_GUILD_ID ? [process.env.DISCORD_GUILD_ID] : []
+            guildIDs: process.env.DISCORD_GUILD_ID ? [process.env.DISCORD_GUILD_ID] : undefined
         });
 
         this.filePath = __filename;
     }
 
+    _makeContainsFilter(field: string, value: string): any[] {
+        return value.split(" ").map(word => ({
+            attr: field,
+            contains: word
+        }));
+    }
 
     async run(ctx: CommandContext) {
-        let query = new DynamoStore(Card).scan();
-        await ctx.defer();
-
+        // await ctx.defer();
+        const filters: FilterExpressions = [];
         for (let [key, value] of Object.entries(ctx.options)) {
             switch (key) {
                 case CardFilter.NameContains:
-                    query = query.whereAttribute("name").contains(value);
+                    filters.splice(0, 0, ...this._makeContainsFilter("name", value));
                     break;
                 case CardFilter.DescriptionContains:
-                    query = query.whereAttribute("description").contains(value);
+                    filters.splice(0, 0, ...this._makeContainsFilter("description", value));
                     break;
                 case CardFilter.LevelUpContains:
-                    query = query.whereAttribute("levelupDescriptionRaw").contains(value);
+                    filters.splice(0, 0, ...this._makeContainsFilter("levelupDescriptionRaw", value));
                     break;
                 case CardFilter.AttackEquals:
-                    query = query.whereAttribute("attack").eq(value);
+                    filters.push({attr: "attack", eq: value});
                     break;
                 case CardFilter.AttackGreater:
-                    query = query.whereAttribute("attack").gt(value);
+                    filters.push({attr: "attack", gt: value});
                     break;
                 case CardFilter.AttackLess:
-                    query = query.whereAttribute("attack").lt(value);
+                    filters.push({attr: "attack", lt: value});
                     break;
                 case CardFilter.HealthEquals:
-                    query = query.whereAttribute("health").eq(value);
+                    filters.push({attr: "health", eq: value});
                     break;
                 case CardFilter.HealthGreater:
-                    query = query.whereAttribute("health").gt(value);
+                    filters.push({attr: "health", gt: value});
                     break;
                 case CardFilter.HealthLess:
-                    query = query.whereAttribute("health").lt(value);
+                    filters.push({attr: "health", lt: value});
                     break;
                 case CardFilter.CostEquals:
-                    query = query.whereAttribute("cost").eq(value);
+                    filters.push({attr: "cost", eq: value});
                     break;
                 case CardFilter.CostGreater:
-                    query = query.whereAttribute("cost").gt(value);
+                    filters.push({attr: "cost", gt: value});
                     break;
                 case CardFilter.CostLess:
-                    query = query.whereAttribute("cost").lt(value);
+                    filters.push({attr: "cost", lt: value});
                     break;
                 case CardFilter.HasKeyword:
-                    query = query.whereAttribute("keywordRefs").contains(value);
+                    filters.push({attr: "keywordRefs", contains: value});
                     break;
                 case CardFilter.HasSupertype:
-                    query = query.whereAttribute("supertype").eq(value)
+                    filters.push({attr: "supertype", eq: value})
                     break;
                 case CardFilter.FromSet:
-                    query = query.whereAttribute("set").eq(value)
+                    filters.push({attr: "set", eq: value})
                     break;
                 case CardFilter.SpellSpeed:
-                    query = query.whereAttribute("spellSpeedRef").eq(value)
+                    filters.push({attr: "spellSpeedRef", eq: value})
                     break;
                 case CardFilter.HasType:
-                    query = query.whereAttribute("type").eq(value)
+                    filters.push({attr: "type", eq: value})
                     break;
                 case CardFilter.HasSubtype:
-                    query = query.whereAttribute("subtypes").contains(value)
+                    filters.push({attr: "subtypes", contains: value})
                     break;
                 case CardFilter.FromRegion:
-                    query = query.whereAttribute("regionRefs").contains(value)
+                    filters.push({attr: "regionRefs", contains: value})
                     break;
                 case CardFilter.HasRarity:
-                    query = query.whereAttribute("rarityRef").eq(value)
+                    filters.push({attr: "rarityRef", eq: value})
                     break;
             }
         }
         try {
-            const result = await query.execFetchAll();
-            if (result.length > 0) {
+            const results = await Card.scan({
+                attributes: ["assets"],
+                filters
+            });
+            if (results.Items.length > 0) {
                 await ctx.sendFollowUp({
                         embeds: [
                             {
                                 image: {
-                                    url: result[0].assets[0].gameAbsolutePath
+                                    url: results.Items[0].assets[0].gameAbsolutePath
                                 }
                             }
                         ]

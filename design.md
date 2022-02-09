@@ -1,0 +1,4 @@
+* Although I started using `slash-create`, which does explicitly support AWS Lambda, I stopped using it because:
+  * I needed to load data asynchronously before registering the commands, as I needed to work out different options. [This isn't possible with `slash-create`](https://github.com/Snazzah/slash-create/issues/239#event-6027833044)
+  * I needed to have multiple lambda entry points, which doesn't particularly work with it either
+* The state machine setup was used because we need to be able to defer, but then perform another response. For more discussion [see this issue](https://github.com/Snazzah/slash-create/issues/127#issuecomment-1032742304).
