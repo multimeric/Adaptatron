@@ -2,6 +2,12 @@
 
 Repository for the Adaptatron discord bot: an interactive card search engine for Legends of Runeterra.
 
+Here's an example use of the bot:
+
+![](media/example_cmd.png)
+
+![](media/example_res.png)
+
 ## Inviting 
 
 ### [Visit this URL to invite Adaptatron to your server](https://discord.com/api/oauth2/authorize?client_id=936919961811714058&scope=applications.commands)
