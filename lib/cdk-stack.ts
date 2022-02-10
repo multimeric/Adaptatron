@@ -101,5 +101,11 @@ export class DiscordStack extends Stack {
             exportName: "discordInteractionsUrl",
         });
 
+        // We also return the setup lambda name so it can be invoked
+        new cdk.CfnOutput(this, "setupLambda", {
+            value: setupFunction.functionName,
+            description: "The name of the setup lambda, which you will need to invoke before the app can run",
+            exportName: "setupLambdaName",
+        });
     }
 }

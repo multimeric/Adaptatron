@@ -11,7 +11,7 @@ export enum CardFilter {
     CostEquals = "cost_equals",
     CostGreater = "cost_greater",
     CostLess = "cost_less",
-    HasKeyword = "has_keyword",
+    HasKeyword = "keyword",
     HasSupertype = "supertype",
     HasType = "type",
     HasSubtype = "subtype",

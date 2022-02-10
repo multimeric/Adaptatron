@@ -57,21 +57,28 @@ async function run_reply(ctx: CommandContext, data: APIGatewayProxyEventV2) {
                     break;
                 case CardFilter.AttackEquals:
                     filters.push({attr: "attack", eq: value});
+                    // If the user is querying attack, they probably want a unit
+                    filters.push({attr: "type", eq: "unit"});
                     break;
                 case CardFilter.AttackGreater:
                     filters.push({attr: "attack", gt: value});
+                    filters.push({attr: "type", eq: "unit"});
                     break;
                 case CardFilter.AttackLess:
                     filters.push({attr: "attack", lt: value});
+                    filters.push({attr: "type", eq: "unit"});
                     break;
                 case CardFilter.HealthEquals:
                     filters.push({attr: "health", eq: value});
+                    filters.push({attr: "type", eq: "unit"});
                     break;
                 case CardFilter.HealthGreater:
                     filters.push({attr: "health", gt: value});
+                    filters.push({attr: "type", eq: "unit"});
                     break;
                 case CardFilter.HealthLess:
                     filters.push({attr: "health", lt: value});
+                    filters.push({attr: "type", eq: "unit"});
                     break;
                 case CardFilter.CostEquals:
                     filters.push({attr: "cost", eq: value});

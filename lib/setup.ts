@@ -216,13 +216,13 @@ async function registerCommands(choices: Choices) {
                     {
                         type: CommandOptionType.STRING,
                         name: CardFilter.HasType,
-                        description: "The unit has the type",
+                        description: "The card has the type",
                         choices: Array.from(choices.types.values())
                     },
                     {
                         type: CommandOptionType.STRING,
                         name: CardFilter.HasSubtype,
-                        description: "The unit has the subtype",
+                        description: "The card has the subtype",
                         choices: Array.from(choices.subtypes.values())
                     },
                     {
