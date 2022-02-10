@@ -1,4 +1,4 @@
-import {commands, getSlashEnv} from "./common";
+import {getSlashEnv} from "./common";
 import * as rune from "lor-data-dragon";
 
 import {DynamoDBDocument} from "@aws-sdk/lib-dynamodb";
@@ -8,11 +8,18 @@ import {zip} from "iter-tools"
 import {Card} from "./models"
 import {CommandOptionType, SlashCreator, ApplicationCommandOptionChoice} from "slash-create";
 
+/**
+ * Awaitable function that delays for a period of time
+ * @param ms Number of milliseconds to wait
+ */
 function delay(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function pushCardBatch(ddbDocClient: DynamoDBDocument, batch: any[]) {
+/**
+ * Pushes a batch of up to 25 cards to the database
+ */
+async function pushCardBatch(batch: any[]) {
     if (!process.env.AWS_TABLE_NAME) {
         throw new Error("AWS_TABLE_NAME must be specified");
     }
@@ -34,6 +41,10 @@ async function pushCardBatch(ddbDocClient: DynamoDBDocument, batch: any[]) {
     }
 }
 
+/**
+ * Main function that iterates every single card and updates the interaction choices, and also puts the cards into the
+ * db
+ */
 async function iterateCards(dragon: rune.DataDragon): Promise<Choices> {
     const ret: Choices = {
         keywords: new Map(),
@@ -57,57 +68,60 @@ async function iterateCards(dragon: rune.DataDragon): Promise<Choices> {
         for (const card of await bundle.getCards()) {
             // Update lists of options
             if (card.spellSpeed) {
-                ret.speeds.set(card.spellSpeed, {name: card.spellSpeed, value: card.spellSpeed});
+                ret.speeds.set(card.spellSpeed, {name: card.spellSpeed, value: card.spellSpeed.toLowerCase()});
             }
             if (card.rarity) {
-                // For some reason the rarityRef is human readable here
-                ret.rarities.set(card.rarityRef, {name: card.rarityRef, value: card.rarityRef});
+                // For some reason the rarityRef is human-readable here
+                ret.rarities.set(card.rarityRef, {name: card.rarityRef, value: card.rarityRef.toLowerCase()});
             }
             if (card.type) {
-                ret.types.set(card.type, {name: card.type, value: card.type});
+                ret.types.set(card.type, {name: card.type, value: card.type.toLowerCase()});
             }
             if (card.supertype) {
-                ret.supertypes.set(card.supertype, {name: card.supertype, value: card.supertype});
+                ret.supertypes.set(card.supertype, {name: card.supertype, value: card.supertype.toLowerCase()});
             }
             if (card.set) {
                 const setNumber = parseInt(card.set.slice(-1));
-                ret.sets.set(setNumber, {name: rune.Set[setNumber], value: setNumber});
+                ret.sets.set(setNumber, {name: rune.Set[setNumber], value: card.set});
             }
 
             for (const [keyword, ref] of zip(card.keywords, card.keywordRefs)) {
                 ret.keywords.set(ref, {
                     name: keyword,
-                    value: ref
+                    value: ref.toLowerCase()
                 })
             }
             for (const [region, ref] of zip(card.regions, card.regionRefs)) {
                 ret.regions.set(ref, {
                     name: region,
-                    value: ref
+                    value: ref.toLowerCase()
                 })
             }
             for (const subtype of card.subtypes) {
                 ret.keywords.set(subtype, {
                     name: subtype.toLowerCase(),
-                    value: subtype
+                    value: subtype.toLowerCase()
                 })
             }
 
             cards.push(card);
 
             if (cards.length == 25) {
-                await pushCardBatch(ddbDocClient, cards);
+                await pushCardBatch(cards);
                 cards.splice(0, 25);
             }
         }
     }
 
     // Add remaining cards
-    await pushCardBatch(ddbDocClient, cards);
+    await pushCardBatch(cards);
 
     return ret;
 }
 
+/**
+ * Used to keep track of interaction choices (enums). Maps are used to avoid duplicates.
+ */
 interface Choices {
     keywords: Map<string, ApplicationCommandOptionChoice>,
     regions: Map<string, ApplicationCommandOptionChoice>,
@@ -121,7 +135,8 @@ interface Choices {
 
 async function registerCommands(choices: Choices) {
     const creator = new SlashCreator(getSlashEnv());
-    // Abuse the slash creator API and directly push a command
+    // Abuse the slash creator API and directly push a command, because there is no async way to register a command
+    // using slash-create. See: https://github.com/Snazzah/slash-create/issues/239
     await creator.api.updateCommands([
             {
                 name: "lorcard",
@@ -191,7 +206,6 @@ async function registerCommands(choices: Choices) {
                         type: CommandOptionType.STRING,
                         name: CardFilter.HasKeyword,
                         description: "The unit has the keyword",
-                        // choices: Array.from(choices.keywords)
                     },
                     {
                         type: CommandOptionType.STRING,
@@ -218,7 +232,7 @@ async function registerCommands(choices: Choices) {
                         choices: Array.from(choices.regions.values())
                     },
                     {
-                        type: CommandOptionType.INTEGER,
+                        type: CommandOptionType.STRING,
                         name: CardFilter.FromSet,
                         description: "The card comes from the set",
                         choices: Array.from(choices.sets.values())
@@ -250,6 +264,7 @@ export async function handler() {
     return "Setup completed";
 }
 
+// Hack to allow us to execute this script directly, when developing
 if (require.main === module) {
     handler();
 }

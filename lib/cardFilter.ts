@@ -1,7 +1,7 @@
 export enum CardFilter {
-    NameContains = "name_contains",
-    DescriptionContains = "description_contains",
-    LevelUpContains = "level_up_contains",
+    NameContains = "name",
+    DescriptionContains = "description",
+    LevelUpContains = "level_up",
     AttackEquals = "attack_equals",
     AttackGreater = "attack_greater",
     AttackLess = "attack_less",
@@ -12,11 +12,11 @@ export enum CardFilter {
     CostGreater = "cost_greater",
     CostLess = "cost_less",
     HasKeyword = "has_keyword",
-    HasSupertype = "has_supertype",
-    HasType = "has_type",
-    HasSubtype = "has_subtype",
-    FromRegion = "from_region",
-    FromSet = "from_set",
-    SpellSpeed = "spell_speed",
+    HasSupertype = "supertype",
+    HasType = "type",
+    HasSubtype = "subtype",
+    FromRegion = "region",
+    FromSet = "set",
+    SpellSpeed = "speed",
     HasRarity = "rarity"
 }

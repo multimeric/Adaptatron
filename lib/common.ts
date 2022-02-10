@@ -1,5 +1,4 @@
-import CardCommand from "./commands/card";
-import LambdaSlashCommand from "./command";
+// Shared utilities
 
 const requiredVars = [
   "DISCORD_APP_ID",
@@ -51,9 +50,3 @@ export function getCdkEnv(): Record<string, string> {
   );
 }
 
-export const commands: typeof LambdaSlashCommand[] = [
-  CardCommand,
-  /*
-  Put your commands here
-  */
-];
