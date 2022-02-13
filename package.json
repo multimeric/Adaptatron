@@ -27,8 +27,9 @@
     "iter-tools": "^7.2.0",
     "lor-data-dragon": "^2.0.0",
     "set-operations": "^1.2.2",
-    "slash-create": "^5.0.3",
+    "slash-create": "^5.2.1",
     "source-map-support": "^0.5.16",
+    "title-case": "^3.0.3",
     "ts-node": "^9.1.1",
     "typescript": "^4.5.5"
   },

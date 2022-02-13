@@ -1,18 +1,18 @@
 import {Entity, Table} from "dynamodb-toolbox";
 import {DocumentClient} from "aws-sdk/clients/dynamodb";
 
-const cardTable = new Table({
-    // Put in a default value so that this doesn't fail when imported by CDK
-    name: process.env.AWS_TABLE_NAME || "SomeTable",
-    partitionKey: "cardCode",
-    DocumentClient: new DocumentClient({
-        region: process.env.AWS_DEFAULT_REGION || "us-east-1"
-    })
-})
+const client = new DocumentClient({
+    region: process.env.AWS_DEFAULT_REGION || "us-east-1"
+});
 
 export const Card = new Entity({
     name: "Card",
-    table: cardTable,
+    table: new Table({
+        // Put in a default value so that this doesn't fail when imported by CDK
+        name: process.env.AWS_CARD_TABLE_NAME || "SomeTable",
+        partitionKey: "cardCode",
+        DocumentClient: client
+    }),
     autoParse: true,
     autoExecute: true,
     attributes: {
@@ -60,7 +60,11 @@ export const Card = new Entity({
             type: "string"
         },
         "name": {
-            transform: (val: string) => val.toLowerCase(),
+            type: "string"
+        },
+        "searchName": {
+            // Lowercased version of the name for search purposes
+            default: (data: any) => data.name.toLowerCase(),
             type: "string"
         },
         "keywords": {
@@ -103,6 +107,39 @@ export const Card = new Entity({
         "set": {
             transform: (val: string) => val.toLowerCase(),
             type: "string"
+        }
+    }
+});
+
+export const Term = new Entity({
+    name: "Term",
+    table: new Table({
+        // Put in a default value so that this doesn't fail when imported by CDK
+        name: process.env.AWS_TERM_TABLE_NAME || "SomeTable",
+        partitionKey: "nameRef",
+        DocumentClient: client,
+        indexes: {
+            searchName: {
+                partitionKey: "searchName"
+            }
+        }
+    }),
+    autoParse: true,
+    autoExecute: true,
+    attributes: {
+        nameRef: {
+            type: "string",
+            partitionKey: true,
+        },
+        "name": {type: "string"},
+        "searchName": {
+            type: "string",
+            default: (data: any) => data.name.trim().toLowerCase(),
+        },
+        "description": {type: "string"},
+        "searchDescription": {
+            type: "string",
+            default: (data: any) => data.description.trim().toLowerCase()
         }
     }
 });

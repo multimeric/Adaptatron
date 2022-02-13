@@ -1,11 +1,12 @@
 import {getSlashEnv} from "./common";
 import {AWSLambdaServer, CommandContext, MessageOptions, SlashCreator} from "slash-create";
-import {Card} from "./models"
-import {CardFilter} from "./cardFilter";
+import {Card, Term} from "./models"
+import {FilterType, Command} from "./types";
 import {FilterExpressions} from "dynamodb-toolbox/dist/lib/expressionBuilder";
 import {InvocationType, InvokeCommand, LambdaClient} from "@aws-sdk/client-lambda";
 import {APIGatewayProxyCallbackV2, APIGatewayProxyEventV2, Context} from "aws-lambda"
 import * as rune from "lor-data-dragon";
+import {titleCase} from "title-case";
 
 function _makeContainsFilter(field: string, value: string): any[] {
     return value.split(" ").map(word => ({
@@ -17,7 +18,7 @@ function _makeContainsFilter(field: string, value: string): any[] {
 /**
  * Run in response to the API Gateway request. Defers the response and then calls the next lambda
  */
-async function run_defer(ctx: CommandContext, data: APIGatewayProxyEventV2) {
+async function runDefer(ctx: CommandContext, data: APIGatewayProxyEventV2) {
     console.log("Running defer");
 
     // Tell discord to wait
@@ -38,80 +39,78 @@ async function run_defer(ctx: CommandContext, data: APIGatewayProxyEventV2) {
     console.log("Success. Terminating.");
 }
 
-async function run_reply(ctx: CommandContext, data: APIGatewayProxyEventV2) {
-    console.log("Running the query");
-
+async function cardReply(ctx: CommandContext) {
     try {
 
         const filters: FilterExpressions = [];
         for (let [key, value] of Object.entries(ctx.options)) {
             switch (key) {
-                case CardFilter.NameContains:
-                    filters.splice(0, 0, ..._makeContainsFilter("name", value.toLowerCase()));
+                case FilterType.NameContains:
+                    filters.splice(0, 0, ..._makeContainsFilter("searchName", value.toLowerCase()));
                     break;
-                case CardFilter.DescriptionContains:
+                case FilterType.DescriptionContains:
                     filters.splice(0, 0, ..._makeContainsFilter("description", value.toLowerCase()));
                     break;
-                case CardFilter.LevelUpContains:
+                case FilterType.LevelUpContains:
                     filters.splice(0, 0, ..._makeContainsFilter("levelupDescriptionRaw", value.toLowerCase()));
                     break;
-                case CardFilter.AttackEquals:
+                case FilterType.AttackEquals:
                     filters.push({attr: "attack", eq: value});
                     // If the user is querying attack, they probably want a unit
                     filters.push({attr: "type", eq: "unit"});
                     break;
-                case CardFilter.AttackGreater:
+                case FilterType.AttackGreater:
                     filters.push({attr: "attack", gt: value});
                     filters.push({attr: "type", eq: "unit"});
                     break;
-                case CardFilter.AttackLess:
+                case FilterType.AttackLess:
                     filters.push({attr: "attack", lt: value});
                     filters.push({attr: "type", eq: "unit"});
                     break;
-                case CardFilter.HealthEquals:
+                case FilterType.HealthEquals:
                     filters.push({attr: "health", eq: value});
                     filters.push({attr: "type", eq: "unit"});
                     break;
-                case CardFilter.HealthGreater:
+                case FilterType.HealthGreater:
                     filters.push({attr: "health", gt: value});
                     filters.push({attr: "type", eq: "unit"});
                     break;
-                case CardFilter.HealthLess:
+                case FilterType.HealthLess:
                     filters.push({attr: "health", lt: value});
                     filters.push({attr: "type", eq: "unit"});
                     break;
-                case CardFilter.CostEquals:
+                case FilterType.CostEquals:
                     filters.push({attr: "cost", eq: value});
                     break;
-                case CardFilter.CostGreater:
+                case FilterType.CostGreater:
                     filters.push({attr: "cost", gt: value});
                     break;
-                case CardFilter.CostLess:
+                case FilterType.CostLess:
                     filters.push({attr: "cost", lt: value});
                     break;
-                case CardFilter.HasKeyword:
+                case FilterType.HasKeyword:
                     // We have to search the raw keywords since this isn't an enum - it's a user string
                     filters.push({attr: "keywords", contains: value.toLowerCase()});
                     break;
-                case CardFilter.HasSupertype:
+                case FilterType.HasSupertype:
                     filters.push({attr: "supertype", eq: value.toLowerCase()})
                     break;
-                case CardFilter.FromSet:
+                case FilterType.FromSet:
                     filters.push({attr: "set", eq: value.toLowerCase()})
                     break;
-                case CardFilter.SpellSpeed:
+                case FilterType.SpellSpeed:
                     filters.push({attr: "spellSpeedRef", eq: value.toLowerCase()})
                     break;
-                case CardFilter.HasType:
+                case FilterType.HasType:
                     filters.push({attr: "type", eq: value.toLowerCase()})
                     break;
-                case CardFilter.HasSubtype:
+                case FilterType.HasSubtype:
                     filters.push({attr: "subtypes", contains: value.toLowerCase()})
                     break;
-                case CardFilter.FromRegion:
+                case FilterType.FromRegion:
                     filters.push({attr: "regionRefs", contains: value.toLowerCase()})
                     break;
-                case CardFilter.HasRarity:
+                case FilterType.HasRarity:
                     filters.push({attr: "rarityRef", eq: value.toLowerCase()})
                     break;
             }
@@ -119,13 +118,13 @@ async function run_reply(ctx: CommandContext, data: APIGatewayProxyEventV2) {
         console.log("Filters compiled, running scan");
         const items: rune.Card[] = [];
         let res = await Card.scan({
-            attributes: ["assets"],
+            attributes: ["assets", "name"],
             filters
         });
         items.splice(0, 0, ...res.Items);
 
         // Add additional hits from subsequent scans
-        while (res.next){
+        while (res.next) {
             res = await res.next()
             items.splice(0, 0, ...res.Items);
         }
@@ -137,8 +136,10 @@ async function run_reply(ctx: CommandContext, data: APIGatewayProxyEventV2) {
             const fullResults = items.slice(0, 4);
             // Show only the count for the remaining results
             const remainingResults = items.slice(4);
+            const contentPrefix = fullResults.map(card => titleCase(card.name)).join(', ');
+            const contentSuffix = remainingResults.length == 0 ? "" : `, and ${remainingResults.length} other results`;
             content = {
-                content: remainingResults.length == 0 ? undefined : `${remainingResults.length} other results`,
+                content: contentPrefix + contentSuffix,
                 // This hack is explained here: https://github.com/discord/discord-api-docs/discussions/3253#discussioncomment-952628
                 embeds: fullResults.map(card => ({
                     url: items[0].assets[0].gameAbsolutePath,
@@ -165,17 +166,62 @@ async function run_reply(ctx: CommandContext, data: APIGatewayProxyEventV2) {
     }
 }
 
+/**
+ * Handle the lordefine command
+ * @param ctx
+ */
+async function defineReply(ctx: CommandContext) {
+    console.log("Handling a define query");
+    try {
+        const query = ctx.options.term.trim().toLowerCase()
+        console.log(`query was ${query}`);
+        // We can do an index lookup here
+        const terms = await Term.query({
+            index: "searchName"
+        }, query);
+        console.log(`We received ${JSON.stringify(terms)}`);
+        const term = terms.Items[0];
+        console.log(`The first hit was ${JSON.stringify(term)}`);
+        await ctx.sendFollowUp({
+            embeds: [
+                {
+                    title: term.name,
+                    description: term.description
+                }
+            ]
+        });
+    } catch (e) {
+        await ctx.sendFollowUp({
+            ephemeral: true,
+            content: "Unknown term"
+        })
+    }
+}
+
+async function runReply(ctx: CommandContext) {
+    console.log("Running the query");
+    switch (ctx.commandName) {
+        case Command.Card:
+            return cardReply(ctx);
+        case Command.Define:
+            return defineReply(ctx);
+    }
+
+}
+
 // This defines the lambda.interactions endpoint
 const creator = new SlashCreator({
     handleCommandsManually: true,
     ...getSlashEnv()
 });
 
-// Don't actually export the real handler, instead handle with the below function
-const server = new AWSLambdaServer({}, "interactions");
-
+let globalEvent: APIGatewayProxyEventV2;
 creator
-    .withServer(server)
+    .withServer(new AWSLambdaServer(module.exports, "interactions"))
+    .on("rawRequest", (treq)=>{
+        // Keep track of the global request object, since we need to forward it to the next lambda
+        globalEvent = treq.body;
+    })
     .on('commandInteraction', (interaction, respond, webserverMode) => {
         const ctx = new CommandContext(
             creator,
@@ -184,17 +230,8 @@ creator
             webserverMode
         );
         if (globalEvent.headers.I_DEFERRED_THIS) {
-            run_reply(ctx, globalEvent);
+            runReply(ctx);
         } else {
-            run_defer(ctx, globalEvent);
+            runDefer(ctx, globalEvent);
         }
     });
-
-let globalEvent: APIGatewayProxyEventV2;
-
-export function interactions(event: APIGatewayProxyEventV2, context: Context, callback: APIGatewayProxyCallbackV2) {
-    console.log(JSON.stringify(event));
-    globalEvent = event;
-    // @ts-ignore
-    server._onRequest(event, context, callback);
-}

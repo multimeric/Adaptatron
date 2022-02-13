@@ -1,4 +1,9 @@
-export enum CardFilter {
+export enum Command {
+    Define = "lordefine",
+    Card = "lorcard"
+}
+
+export enum FilterType {
     NameContains = "name",
     DescriptionContains = "description",
     LevelUpContains = "level_up",

@@ -1,12 +1,10 @@
 import {getSlashEnv} from "./common";
 import * as rune from "lor-data-dragon";
 
-import {DynamoDBDocument} from "@aws-sdk/lib-dynamodb";
-import {DynamoDB} from "@aws-sdk/client-dynamodb";
-import {CardFilter} from "./cardFilter"
-import {zip} from "iter-tools"
-import {Card} from "./models"
-import {CommandOptionType, SlashCreator, ApplicationCommandOptionChoice} from "slash-create";
+import {FilterType, Command} from "./types"
+import {batch, concat, zip} from "iter-tools"
+import {Card, Term} from "./models"
+import {ApplicationCommandOptionChoice, CommandOptionType, SlashCreator} from "slash-create";
 
 /**
  * Awaitable function that delays for a period of time
@@ -20,9 +18,6 @@ function delay(ms: number) {
  * Pushes a batch of up to 25 cards to the database
  */
 async function pushCardBatch(batch: any[]) {
-    if (!process.env.AWS_TABLE_NAME) {
-        throw new Error("AWS_TABLE_NAME must be specified");
-    }
     // Loop until it succeeds
     while (true) {
         try {
@@ -57,8 +52,6 @@ async function iterateCards(dragon: rune.DataDragon): Promise<Choices> {
         types: new Map(),
     };
     const cards = [];
-    const client = new DynamoDB({});
-    const ddbDocClient = DynamoDBDocument.from(client)
 
     for (const set of Object.values(rune.Set)) {
         if (!(typeof set === "number")) {
@@ -139,113 +132,124 @@ async function registerCommands(choices: Choices) {
     // using slash-create. See: https://github.com/Snazzah/slash-create/issues/239
     await creator.api.updateCommands([
             {
+                name: "lordefine",
+                description: "Defines a keyword or other vocabulary term from Legends of Runeterra",
+                options: [
+                    {
+                        name: "term"  ,
+                        type: CommandOptionType.STRING,
+                        description: 'The vocabulary term, e.g. "Deep", or "Reforge"'
+                    }
+                ]
+            },
+            {
                 name: "lorcard",
                 description: "Retrieves a Legends of Runeterra card matching a set of criteria",
                 options: [
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.NameContains,
+                        name: FilterType.NameContains,
                         description: "One or more words that can be found within the card name",
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.DescriptionContains,
+                        name: FilterType.DescriptionContains,
                         description: "One or more words that can be found within the card's description",
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.LevelUpContains,
+                        name: FilterType.LevelUpContains,
                         description: "One or more words that can be found within the champion's level up text",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.AttackEquals,
+                        name: FilterType.AttackEquals,
                         description: "The unit's attack is equal to",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.AttackGreater,
+                        name: FilterType.AttackGreater,
                         description: "The unit's attack is greater than",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.AttackLess,
+                        name: FilterType.AttackLess,
                         description: "The unit's attack is less than",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.HealthEquals,
+                        name: FilterType.HealthEquals,
                         description: "The unit's health is equal to",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.HealthGreater,
+                        name: FilterType.HealthGreater,
                         description: "The unit's health is greater than",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.HealthLess,
+                        name: FilterType.HealthLess,
                         description: "The unit's health is less than",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.CostEquals,
+                        name: FilterType.CostEquals,
                         description: "The unit's cost is equal to",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.CostGreater,
+                        name: FilterType.CostGreater,
                         description: "The unit's cost is greater than",
                     },
                     {
                         type: CommandOptionType.INTEGER,
-                        name: CardFilter.CostLess,
+                        name: FilterType.CostLess,
                         description: "The unit's cost is less than",
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.HasKeyword,
+                        name: FilterType.HasKeyword,
                         description: "The unit has the keyword",
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.HasSupertype,
+                        name: FilterType.HasSupertype,
                         description: "The unit has the supertype",
                         choices: Array.from(choices.supertypes.values())
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.HasType,
+                        name: FilterType.HasType,
                         description: "The card has the type",
                         choices: Array.from(choices.types.values())
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.HasSubtype,
+                        name: FilterType.HasSubtype,
                         description: "The card has the subtype",
                         choices: Array.from(choices.subtypes.values())
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.FromRegion,
+                        name: FilterType.FromRegion,
                         description: "The card comes from the region",
                         choices: Array.from(choices.regions.values())
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.FromSet,
+                        name: FilterType.FromSet,
                         description: "The card comes from the set",
                         choices: Array.from(choices.sets.values())
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.SpellSpeed,
+                        name: FilterType.SpellSpeed,
                         description: "The spell has the speed",
                         choices: Array.from(choices.speeds.values())
                     },
                     {
                         type: CommandOptionType.STRING,
-                        name: CardFilter.HasRarity,
+                        name: FilterType.HasRarity,
                         description: "The card has the rarity",
                         choices: Array.from(choices.rarities.values())
                     },
@@ -257,9 +261,26 @@ async function registerCommands(choices: Choices) {
     )
 }
 
+/**
+ * Populates the Terms table
+ */
+async function iterateTerms(dragon: rune.DataDragon){
+    console.log("Loading term database");
+    const bundle = await dragon.getCoreBundle(rune.Locale.English, "latest");
+    const global = await bundle.getGlobalData();
+    console.log("Bundle downloaded");
+    for (let termBatch of batch(25, concat(global.vocabTerms, global.keywords))){
+        const rawInput = Array.from(termBatch).map(it => Term.putBatch(it));
+        console.log(JSON.stringify(rawInput));
+        await Term.table.batchWrite(rawInput);
+    }
+    console.log("Term database built successfully");
+}
+
 export async function handler() {
     const dragon = new rune.DataDragon({});
     const choices = await iterateCards(dragon);
+    await iterateTerms(dragon);
     await registerCommands(choices);
     return "Setup completed";
 }
