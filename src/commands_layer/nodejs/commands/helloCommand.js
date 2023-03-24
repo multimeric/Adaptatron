@@ -31,6 +31,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const slash_create_1 = require("slash-create");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
+const fsprom = __importStar(require("fs/promises"));
 var Rarity;
 (function (Rarity) {
     Rarity["Common"] = "common";
@@ -78,22 +79,35 @@ class CardCommand extends slash_create_1.SlashCommand {
         return __awaiter(this, void 0, void 0, function* () {
             yield ctx.defer();
             const search = ctx.options.query;
-            for (let card of DATA_JSON) {
-                if (card.name.includes(search)) {
-                    yield ctx.send({
-                        content: `
-${card.name} | ${card.cost}
-${card.descriptionRaw}
-${card.attack} | ${card.health}  
-                    `,
-                        // embeds: [ { } ]
-                    });
-                    return;
+            const hit = DATA_JSON.find(card => card.name.includes(search));
+            if (hit) {
+                const artFilename = hit.cardCode + '.png';
+                const artFilepath = path.join(IMG_DIR, artFilename);
+                const buff = yield fsprom.readFile(artFilepath);
+                if (buff) {
+                    try {
+                        yield ctx.send({
+                            file: {
+                                file: buff,
+                                name: artFilename
+                            },
+                            embeds: [
+                                {
+                                    image: {
+                                        url: `attachment://${artFilename}`
+                                    }
+                                }
+                            ]
+                        });
+                        return;
+                    }
+                    catch (e) {
+                        console.error(e);
+                    }
                 }
             }
             yield ctx.send({
-                content: `failed`
-                // embeds: [ { } ]
+                content: `Failed`
             });
         });
     }

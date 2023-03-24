@@ -1,6 +1,7 @@
 import {CommandContext, CommandOptionType, SlashCommand, SlashCreator} from 'slash-create';
 import * as path from "path";
 import * as fs from "fs";
+import * as fsprom from "fs/promises";
 
 interface Asset {
     gameAbsolutePath: string,
@@ -86,23 +87,36 @@ export default class CardCommand extends SlashCommand {
     async run(ctx: CommandContext) {
         await ctx.defer();
         const search = ctx.options.query;
-        for (let card of DATA_JSON){
-            if (card.name.includes(search)){
-                await ctx.send({
-                    content: `
-${card.name} | ${card.cost}
-${card.descriptionRaw}
-${card.attack} | ${card.health}  
-                    `,
-                    // embeds: [ { } ]
-            });
-                return;
+        const hit = DATA_JSON.find(card => card.name.includes(search));
+        if (hit){
+            const artFilename = hit.cardCode + '.png';
+            const artFilepath = path.join(IMG_DIR, artFilename)
+            const buff = await fsprom.readFile(artFilepath);
+            if (buff) {
+                try {
+                    await ctx.send({
+                        file: {
+                                file: buff,
+                                name: artFilename
+                            },
+                        embeds: [
+                            {
+                                image: {
+                                    url: `attachment://${artFilename}`
+                                }
+                            }
+                        ]
+                    });
+                    return;
+                }
+                catch (e){
+                    console.error(e)
+                }
             }
         }
-        await ctx.send({
-            content: `failed`
-            // embeds: [ { } ]
-        });
+            await ctx.send({
+                content: `Failed`
+            });
     }
 }
 
